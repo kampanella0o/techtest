@@ -17,17 +17,22 @@ import java.util.UUID;
 @Repository
 
 public class BigQueryRepository {
-    Logger logger = LoggerFactory.getLogger(AvroParser.class);
+    private Logger logger = LoggerFactory.getLogger(AvroParser.class);
 
     private final String QUERY_TEMPLATE = "INSERT INTO `%s" +
             "` VALUES (\"%s\", \"%s\", \"%s\", \"%s\");";
     private final String ALL_FIELDS_TABLE = "extreme-water-293016.AvroFilesFields.AllFields";
-    private final String MANDATORY_FIELDS_TABLE = "";
+    private final String MANDATORY_FIELDS_TABLE = "extreme-water-293016.AvroFilesFields.MandatoryFields";
     private BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
 
     public void insertIntoAllFields(String fileName, String objectName, String fieldName, String fieldValue){
         logger.info("Creating a query");
         String query = String.format(QUERY_TEMPLATE, ALL_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
+        sendQuery(query);
+    }
+    public void insertIntoMandatoryFields(String fileName, String objectName, String fieldName, String fieldValue){
+        logger.info("Creating a query");
+        String query = String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
         sendQuery(query);
     }
 

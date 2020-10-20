@@ -59,7 +59,7 @@ public class BucketListener {
 //        } catch (TimeoutException timeoutException) {
             // Shut down the subscriber after 30s. Stop receiving messages.
             //TODO should I shut down the subscriber anyhow?
-            subscriber.stopAsync();
+//            subscriber.stopAsync();
         }
     }
 

@@ -25,7 +25,7 @@ import java.util.Map;
 @Service
 public class AvroParser {
 
-    Logger logger = LoggerFactory.getLogger(AvroParser.class);
+    private Logger logger = LoggerFactory.getLogger(AvroParser.class);
 
     @Autowired
     BigQueryRepository bigQueryRepository;
@@ -40,31 +40,33 @@ public class AvroParser {
 
         logger.info("Getting avro schema from {} and parsing it", bucketFileName);
         DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
-        DataFileReader<GenericRecord> dataFileReader = null;
-        try {
-            dataFileReader = new DataFileReader<>(localFile.toFile(), datumReader);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        Schema avroFileSchema = dataFileReader.getSchema();
-        Map<String, String> fields = new HashMap<>();
-        avroFileSchema.getFields().forEach(f -> fields.put(f.name(), f.schema().getType().getName()));
-        GenericRecord record = null;
-        try {
+
+        try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(localFile.toFile(), datumReader)) {
+
+            Schema avroFileSchema = dataFileReader.getSchema();
+
+            Map<String, String> fields = new HashMap<>();
+            avroFileSchema.getFields().forEach(f -> fields.put(f.name(), f.schema().getType().getName()));
+
+            GenericRecord record = null;
             record = dataFileReader.next(record);
+
+            for (String field : fields.keySet()) {
+                bigQueryRepository.insertIntoAllFields(bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field)));
+                if (!fields.get(field).equals("union")) {
+                    bigQueryRepository.insertIntoMandatoryFields(bucketFileName, avroFileSchema.getName(), field, record.get(field).toString());
+                }
+            }
+
+
         } catch (IOException e) {
-
-            e.printStackTrace();
-        }
-
-        for (String field : fields.keySet()) {
-            bigQueryRepository.insertIntoAllFields(bucketFileName, avroFileSchema.getName(), field, record.get(field).toString());
+            logger.error("Something went wrong, file can't be parsed" + e.getLocalizedMessage());
         }
 
         try {
             Files.delete(localFile);
         } catch (IOException e) {
-            logger.error(e.getLocalizedMessage());
+            logger.error("Cant delete file: " + e.getLocalizedMessage());
         }
 
     }
