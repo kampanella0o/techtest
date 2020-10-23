@@ -15,53 +15,54 @@ import com.google.cloud.bigquery.QueryJobConfiguration;
 import java.util.UUID;
 
 @Repository
-
 public class BigQueryRepository {
     private Logger logger = LoggerFactory.getLogger(AvroParser.class);
-
     private final String QUERY_TEMPLATE = "INSERT INTO `%s" +
             "` VALUES (\"%s\", \"%s\", \"%s\", \"%s\");";
-    private final String ALL_FIELDS_TABLE = "extreme-water-293016.AvroFilesFields.AllFields";
-    private final String MANDATORY_FIELDS_TABLE = "extreme-water-293016.AvroFilesFields.MandatoryFields";
+    private final String ALL_FIELDS_TABLE = System.getenv("ProjectID")
+            + "." + System.getenv("DataSetName")
+            + "." + System.getenv("AllFieldsTableName");
+    private final String MANDATORY_FIELDS_TABLE =  System.getenv("ProjectID")
+            + "." + System.getenv("DataSetName")
+            + "." + System.getenv("MandatoryFieldsTableName");
     private BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
 
-    public void insertIntoAllFields(String fileName, String objectName, String fieldName, String fieldValue){
-        logger.info("Creating a query");
+    /**
+     * Inserts the received data to the proper table of BigQuery
+     * @param isMandatory if true add the data also to the Mandatory Fields Table
+     * @param fileName name of the file in a bucket
+     * @param objectName name of the object according to the AVRO schema
+     * @param fieldName name of the field according to the AVRO schema
+     * @param fieldValue value of the field
+     */
+    public void insertField(boolean isMandatory, String fileName, String objectName, String fieldName, String fieldValue){
         String query = String.format(QUERY_TEMPLATE, ALL_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
         sendQuery(query);
-    }
-    public void insertIntoMandatoryFields(String fileName, String objectName, String fieldName, String fieldValue){
-        logger.info("Creating a query");
-        String query = String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
-        sendQuery(query);
+        if (isMandatory) {
+            query = String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
+            sendQuery(query);
+        }
     }
 
     private void sendQuery(String query){
         logger.info("Querying the BigQuery with '{}'", query);
         QueryJobConfiguration queryConfig =
                 QueryJobConfiguration.newBuilder(query)
-                        // Use standard SQL syntax for queries.
-                        // See: https://cloud.google.com/bigquery/sql-reference/
                         .setUseLegacySql(false)
                         .build();
 
-        // Create a job ID so that we can safely retry.
         JobId jobId = JobId.of(UUID.randomUUID().toString());
         Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
 
-        // Wait for the query to complete.
         try {
             queryJob = queryJob.waitFor();
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            logger.error("Query job failed", e);
         }
 
-        // Check for errors
         if (queryJob == null) {
             throw new RuntimeException("Job no longer exists");
         } else if (queryJob.getStatus().getError() != null) {
-            // You can also look at queryJob.getStatus().getExecutionErrors() for all
-            // errors, not just the latest one.
             throw new RuntimeException(queryJob.getStatus().getError().toString());
         }
     }

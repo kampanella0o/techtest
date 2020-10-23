@@ -1,66 +1,73 @@
 package com.maksym.techtest.service;
 
+import com.google.api.gax.core.ExecutorProvider;
+import com.google.api.gax.core.InstantiatingExecutorProvider;
 import com.google.cloud.pubsub.v1.AckReplyConsumer;
 import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.cloud.pubsub.v1.Subscriber;
+import com.google.cloud.storage.StorageException;
 import com.google.pubsub.v1.ProjectSubscriptionName;
 import com.google.pubsub.v1.PubsubMessage;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import java.io.IOException;
 
-@Component
+@Service
 public class BucketListener {
     private Logger logger = LoggerFactory.getLogger(AvroParser.class);
 
 
-    @Autowired
+    private final
     AvroParser avroParser;
+
+    public BucketListener(AvroParser avroParser) {
+        this.avroParser = avroParser;
+    }
 
     @PostConstruct
     public void checkMessagesFromBucket() {
-        String projectId = "extreme-water-293016";
-        String subscriptionId = "myermolenko-new-bucket-subscription";
+        String projectId = System.getenv("ProjectID");
+        String subscriptionId = System.getenv("SubscriptionID");
 
         logger.info("Creating PubSub subscription on project {} with id {}", projectId, subscriptionId);
         ProjectSubscriptionName subscriptionName =
                 ProjectSubscriptionName.of(projectId, subscriptionId);
 
         logger.info("Instantiating an asynchronous message receiver");
-        // Instantiate an asynchronous message receiver.
         MessageReceiver receiver =
                 (PubsubMessage message, AckReplyConsumer consumer) -> {
-                    // Handle incoming message, then ack the received message.
                     logger.info("Handling incoming message");
                     String fileName = message.getAttributesOrThrow("objectId");
                     logger.info("Event type: {}, file name: {}", message.getAttributesOrThrow("eventType"), fileName);
+                    consumer.ack();
                     if (message.getAttributesOrThrow("eventType").equals("OBJECT_FINALIZE")){
                         if (FilenameUtils.getExtension(message.getAttributesOrThrow("objectId")).equals("avro")){
-                            avroParser.parseAvroFile(fileName);
+                            try {
+                                avroParser.parseAvroFile(fileName);
+                            } catch (StorageException e) {
+                                logger.error("Failed to connect to Google Cloud Storage: ", e);
+                            } catch (IOException e) {
+                                logger.error("Failed to process the file: ", e);
+                            } catch (RuntimeException e) {
+                                logger.error("Something went wrong during parsing the file: ", e);
+                            }
                         }
                     }
-                    consumer.ack();
                 };
 
         logger.info("Instantiating the subscriber");
-        Subscriber subscriber = null;
-        try {
-            subscriber = Subscriber.newBuilder(subscriptionName, receiver).build();
-            // Start the subscriber.
-            subscriber.startAsync().awaitRunning();
-            System.out.printf("Listening for messages on %s:\n", subscriptionName.toString());
-            // Allow the subscriber to run for 30s unless an unrecoverable error occurs.
-//            subscriber.awaitTerminated(30, TimeUnit.SECONDS);
-        } catch (Exception timeoutException) {
-//        } catch (TimeoutException timeoutException) {
-            // Shut down the subscriber after 30s. Stop receiving messages.
-            //TODO should I shut down the subscriber anyhow?
-//            subscriber.stopAsync();
-        }
+        ExecutorProvider executorProvider =
+                InstantiatingExecutorProvider.newBuilder()
+                        .setExecutorThreadCount(1)
+                        .build();
+        Subscriber subscriber = Subscriber.newBuilder(subscriptionName, receiver).setExecutorProvider(executorProvider).build();
+        subscriber.startAsync().awaitRunning();
+        logger.info("Listening for messages on {}: ", subscriptionName.toString());
     }
 
 }

@@ -1,9 +1,6 @@
 package com.maksym.techtest.service;
 
-import com.google.cloud.storage.Blob;
-import com.google.cloud.storage.BlobId;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
+import com.google.cloud.storage.*;
 import com.maksym.techtest.repository.BigQueryRepository;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
@@ -19,55 +16,58 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class AvroParser {
 
     private Logger logger = LoggerFactory.getLogger(AvroParser.class);
 
-    @Autowired
-    BigQueryRepository bigQueryRepository;
+    private final
+    BigQueryRepository repository;
 
-    public void parseAvroFile(String bucketFileName) {
+    public AvroParser(BigQueryRepository repository) {
+        this.repository = repository;
+    }
+
+    public void parseAvroFile(String bucketFileName) throws IOException {
+        logger.info("Setting storage connection");
+        Storage storage = StorageOptions.newBuilder().setProjectId(System.getenv("ProjectID")).build().getService();
+
         logger.info("Getting {} from storage", bucketFileName);
-        Storage storage = StorageOptions.newBuilder().setProjectId("extreme-water-293016").build().getService();
+        Blob blob = storage.get(BlobId.of(System.getenv("BucketID"), bucketFileName));
 
-        Blob blob = storage.get(BlobId.of("myermolenko-new-bucket", bucketFileName));
-        Path localFile = Paths.get("src/main/java/temp/" + bucketFileName); //TODO replace with temp file
+        Path localFile = Files.createTempFile(Paths.get("tmp/"), bucketFileName, ".tmp");
+
+        logger.info("Downloading {} from storage to {}", bucketFileName, localFile.getFileName());
         blob.downloadTo(localFile);
 
-        logger.info("Getting avro schema from {} and parsing it", bucketFileName);
         DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
 
         try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(localFile.toFile(), datumReader)) {
 
+            logger.info("Getting avro schema from {} and parsing it", bucketFileName);
             Schema avroFileSchema = dataFileReader.getSchema();
 
-            Map<String, String> fields = new HashMap<>();
-            avroFileSchema.getFields().forEach(f -> fields.put(f.name(), f.schema().getType().getName()));
+            Set<String> fields = avroFileSchema.getFields().stream()
+                    .map(Schema.Field::name)
+                    .collect(Collectors.toSet());
 
-            GenericRecord record = null;
-            record = dataFileReader.next(record);
+            GenericRecord record = dataFileReader.next();
 
-            for (String field : fields.keySet()) {
-                bigQueryRepository.insertIntoAllFields(bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field)));
-                if (!fields.get(field).equals("union")) {
-                    bigQueryRepository.insertIntoMandatoryFields(bucketFileName, avroFileSchema.getName(), field, record.get(field).toString());
-                }
-            }
-
+            fields.parallelStream()
+                    .forEach(field -> repository.insertField(checkMandatory(avroFileSchema, field), bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field))));
 
         } catch (IOException e) {
-            logger.error("Something went wrong, file can't be parsed" + e.getLocalizedMessage());
+            throw new IOException(e);
         }
 
-        try {
-            Files.delete(localFile);
-        } catch (IOException e) {
-            logger.error("Cant delete file: " + e.getLocalizedMessage());
-        }
+        Files.delete(localFile);
 
+    }
+
+    private boolean checkMandatory (Schema avroFileSchema, String field) {
+        return !avroFileSchema.getField(field).schema().toString().contains("null");
     }
 }

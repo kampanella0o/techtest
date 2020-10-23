@@ -19,9 +19,9 @@ public class AvroCreater {
         client.setAddress("address");
         client.setPhone("09810061");
 
-        DatumWriter<Client> clientDatumWriter = new SpecificDatumWriter<Client>(Client.class);
-        DataFileWriter<Client> dataFileWriter = new DataFileWriter<Client>(clientDatumWriter);
-        final File file = new File("C:\\temp\\client2.avro");
+        DatumWriter<Client> clientDatumWriter = new SpecificDatumWriter<>(Client.class);
+        DataFileWriter<Client> dataFileWriter = new DataFileWriter<>(clientDatumWriter);
+        final File file = new File("tmp/new_client.avro");
 
         try {
             dataFileWriter.create(avroSchema, file);
