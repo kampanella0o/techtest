@@ -36,12 +36,11 @@ public class BigQueryRepository {
      * @param fieldValue value of the field
      */
     public void insertField(boolean isMandatory, String fileName, String objectName, String fieldName, String fieldValue){
-        String query = String.format(QUERY_TEMPLATE, ALL_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
-        sendQuery(query);
+        StringBuilder query = new StringBuilder(String.format(QUERY_TEMPLATE, ALL_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue));
         if (isMandatory) {
-            query = String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue);
-            sendQuery(query);
+            query.append(String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue));
         }
+        sendQuery(query.toString());
     }
 
     private void sendQuery(String query){
