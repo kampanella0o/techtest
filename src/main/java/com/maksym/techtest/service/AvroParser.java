@@ -11,6 +11,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,7 @@ public class AvroParser {
         logger.info("Getting {} from storage", bucketFileName);
         Blob blob = storage.get(BlobId.of(System.getenv("BucketID"), bucketFileName));
 
-        Path localFile = Files.createTempFile(tempDir, bucketFileName, ".tmp");
+        Path localFile = Files.createTempFile(tempDir, FilenameUtils.getName(bucketFileName), ".tmp");
 
         logger.info("Downloading {} from storage to {}", bucketFileName, localFile.getFileName());
         blob.downloadTo(localFile);

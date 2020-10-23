@@ -11,7 +11,6 @@ import com.google.pubsub.v1.PubsubMessage;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -49,7 +48,7 @@ public class BucketListener {
                     if (eventType.equals("OBJECT_FINALIZE")){
                         if (FilenameUtils.getExtension(fileName).equals("avro")){
                             try {
-                                avroParser.parseAvroFile(FilenameUtils.getName(fileName));
+                                avroParser.parseAvroFile(fileName);
                             } catch (StorageException e) {
                                 logger.error("Failed to connect to Google Cloud Storage: ", e);
                             } catch (IOException e) {
