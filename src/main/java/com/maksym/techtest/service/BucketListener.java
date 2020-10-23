@@ -43,12 +43,13 @@ public class BucketListener {
                 (PubsubMessage message, AckReplyConsumer consumer) -> {
                     logger.info("Handling incoming message");
                     String fileName = message.getAttributesOrThrow("objectId");
-                    logger.info("Event type: {}, file name: {}", message.getAttributesOrThrow("eventType"), fileName);
+                    String eventType = message.getAttributesOrThrow("eventType");
+                    logger.info("Event type: {}, file name: {}", eventType, fileName);
                     consumer.ack();
-                    if (message.getAttributesOrThrow("eventType").equals("OBJECT_FINALIZE")){
-                        if (FilenameUtils.getExtension(message.getAttributesOrThrow("objectId")).equals("avro")){
+                    if (eventType.equals("OBJECT_FINALIZE")){
+                        if (FilenameUtils.getExtension(fileName).equals("avro")){
                             try {
-                                avroParser.parseAvroFile(fileName);
+                                avroParser.parseAvroFile(FilenameUtils.getName(fileName));
                             } catch (StorageException e) {
                                 logger.error("Failed to connect to Google Cloud Storage: ", e);
                             } catch (IOException e) {

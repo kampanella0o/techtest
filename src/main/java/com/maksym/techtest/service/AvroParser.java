@@ -1,15 +1,18 @@
 package com.maksym.techtest.service;
 
-import com.google.cloud.storage.*;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import com.maksym.techtest.repository.BigQueryRepository;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -32,13 +35,17 @@ public class AvroParser {
     }
 
     public void parseAvroFile(String bucketFileName) throws IOException {
+
+        final Path tempDir = Paths.get("tmp/");
+        FileUtils.cleanDirectory(tempDir.toFile());
+
         logger.info("Setting storage connection");
         Storage storage = StorageOptions.newBuilder().setProjectId(System.getenv("ProjectID")).build().getService();
 
         logger.info("Getting {} from storage", bucketFileName);
         Blob blob = storage.get(BlobId.of(System.getenv("BucketID"), bucketFileName));
 
-        Path localFile = Files.createTempFile(Paths.get("tmp/"), bucketFileName, ".tmp");
+        Path localFile = Files.createTempFile(tempDir, bucketFileName, ".tmp");
 
         logger.info("Downloading {} from storage to {}", bucketFileName, localFile.getFileName());
         blob.downloadTo(localFile);
@@ -56,8 +63,7 @@ public class AvroParser {
 
             GenericRecord record = dataFileReader.next();
 
-            fields.parallelStream()
-                    .forEach(field -> repository.insertField(checkMandatory(avroFileSchema, field), bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field))));
+            fields.forEach(field -> repository.insertField(checkMandatory(avroFileSchema, field), bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field))));
 
         } catch (IOException e) {
             throw new IOException(e);
