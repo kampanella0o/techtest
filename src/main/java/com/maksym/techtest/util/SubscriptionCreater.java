@@ -11,8 +11,8 @@ public class SubscriptionCreater {
     public static void createPullSubscriptionExample() throws IOException {
 
         String projectId = "extreme-water-293016";
-        String subscriptionId = "techtest-bucket-test-subscription";
-        String topicId = "techtest-bucket-test";
+        String subscriptionId = "techtest-bucket2-subscription";
+        String topicId = "techtest-bucket2";
 
         try (SubscriptionAdminClient subscriptionAdminClient = SubscriptionAdminClient.create()) {
             TopicName topicName = TopicName.of(projectId, topicId);

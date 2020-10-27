@@ -17,8 +17,6 @@ import java.util.UUID;
 @Repository
 public class BigQueryRepository {
     private Logger logger = LoggerFactory.getLogger(AvroParser.class);
-    private final String QUERY_TEMPLATE = "INSERT INTO `%s" +
-            "` VALUES (\"%s\", \"%s\", \"%s\", \"%s\");";
     private final String ALL_FIELDS_TABLE = System.getenv("ProjectID")
             + "." + System.getenv("DataSetName")
             + "." + System.getenv("AllFieldsTableName");
@@ -36,6 +34,8 @@ public class BigQueryRepository {
      * @param fieldValue value of the field
      */
     public void insertField(boolean isMandatory, String fileName, String objectName, String fieldName, String fieldValue){
+        String QUERY_TEMPLATE = "INSERT INTO `%s" +
+                "` VALUES (\"%s\", \"%s\", \"%s\", \"%s\");";
         StringBuilder query = new StringBuilder(String.format(QUERY_TEMPLATE, ALL_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue));
         if (isMandatory) {
             query.append(String.format(QUERY_TEMPLATE, MANDATORY_FIELDS_TABLE, fileName, objectName, fieldName, fieldValue));
