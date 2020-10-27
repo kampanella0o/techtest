@@ -41,10 +41,19 @@ public class AvroParser {
         FileUtils.cleanDirectory(tempDir.toFile());
 
         logger.info("Setting storage connection");
-        Storage storage = StorageOptions.newBuilder().setProjectId(System.getenv("ProjectID")).build().getService();
+        System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");
+        StorageOptions.Builder optionsBuilder = StorageOptions.newBuilder().setHost("https://storage.googleapis.com/");
+//        Storage storage = optionsBuilder.build().getService();
+        Storage storage = optionsBuilder.setProjectId(System.getenv("ProjectID")).build().getService();
 
         logger.info("Getting {} from storage", bucketFileName);
         Blob blob = storage.get(BlobId.of(System.getenv("BucketID"), bucketFileName));
+
+        logger.info("Checking if {} exists in storage", bucketFileName);
+        if (blob == null) {
+            logger.info("{} does not exist in storage", bucketFileName);
+            return;
+        }
 
         Path localFile = Files.createTempFile(tempDir, FilenameUtils.getName(bucketFileName), ".tmp");
 
@@ -64,7 +73,8 @@ public class AvroParser {
 
             GenericRecord record = dataFileReader.next();
 
-            fields.forEach(field -> repository.insertField(checkMandatory(avroFileSchema, field), bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field))));
+            fields.parallelStream()
+                    .forEach(field -> repository.insertField(checkMandatory(avroFileSchema, field), bucketFileName, avroFileSchema.getName(), field, String.valueOf(record.get(field))));
 
         } catch (IOException e) {
             throw new IOException(e);
@@ -74,7 +84,7 @@ public class AvroParser {
 
     }
 
-    private boolean checkMandatory (Schema avroFileSchema, String field) {
+    private boolean checkMandatory(Schema avroFileSchema, String field) {
         return !avroFileSchema.getField(field).schema().toString().contains("null");
     }
 }
